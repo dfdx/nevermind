@@ -90,12 +90,12 @@ RUN pip install -r requirements.txt
 
 ## Post-install setup
 
-RUN mkdir -p ${HOME}/.cache
-RUN echo 'export PATH=${PATH}:${HOME}/.local/bin' >> ${HOME}/.bashrc
+# RUN mkdir -p ${HOME}/.cache
+# RUN echo 'export PATH=${PATH}:${HOME}/.local/bin' >> ${HOME}/.bashrc
 
-# ensure libraries see CUDA
-RUN echo 'export LD_LIBRARY_PATH=/usr/local/cuda-11/lib64:/usr/lib/x86_64-linux-gnu/:${LD_LIBRARY_PATH}' >> ${HOME}/.bashrc
-RUN echo 'export PATH=/usr/local/cuda/bin:${PATH}' >> ${HOME}/.bashrc
+# # ensure libraries see CUDA
+# RUN echo 'export LD_LIBRARY_PATH=/usr/local/cuda-11/lib64:/usr/lib/x86_64-linux-gnu/:${LD_LIBRARY_PATH}' >> ${HOME}/.bashrc
+# RUN echo 'export PATH=/usr/local/cuda/bin:${PATH}' >> ${HOME}/.bashrc
 
 
 FROM build-base AS build-dev

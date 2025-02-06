@@ -1,5 +1,6 @@
 import jax
 import jax.numpy as jnp
+from flax import nnx
 from fabrique.models.llm import LLM
 from smolagents import CodeAgent, DuckDuckGoSearchTool, HfApiModel, ChatMessage
 
@@ -39,11 +40,22 @@ class ModelCaller:
             dtype=jnp.bfloat16,
             param_dtype=jnp.bfloat16
         )
+        self.rngs = nnx.Rngs(0)
 
     def __call__(self, inst: str, **kwargs):
+        global X
+        X = inst
+        print(f"INSTRUCTION:\n\n{inst}\n\n")
         print(f"ModelCaller: extra kwargs = {kwargs}")
         prompt = LLAMA_TMPL.format(inst)
-        generated = self.llm.generate(prompt)
+        generated = self.llm.generate(
+            prompt,
+            max_length=self.llm.model.args.max_seq_len,
+            temperature=1.0,
+            # top_p=0.5,
+            # top_k=3,
+            prng_key=self.rngs()
+        )
         msg = ChatMessage(role="assistant", content=generated)
         return msg
 
@@ -53,7 +65,7 @@ def main():
     mcall = ModelCaller()
     prompt = "Write a Python function to print current time in HH:MM:SS format"
     out = mcall(prompt)
-    print(out)
+    print(out.content)
 
     #= HfApiModel() ==#
     agent = CodeAgent(tools=[DuckDuckGoSearchTool()], model=mcall, additional_authorized_imports="*")
