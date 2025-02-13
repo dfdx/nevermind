@@ -4,10 +4,10 @@ import re
 import importlib
 import traceback
 from dataclasses import dataclass
-from typing import Dict, List
+from typing import List
 
 import jax.numpy as jnp
-from flax import nnx
+import datasets
 from fabrique import LLM, ChatMessage
 
 
@@ -189,18 +189,17 @@ class Agent:
         self.trace = []
 
 
-    def step(self, user_prompt: str):
+    def step(self, task: str):
         memory = "<memory>\n" + "\n\n".join(self.memory) + "\n</memory>"
-        prompt = f"{user_prompt}\n\n{memory}\n\n"
+        prompt = f"{task}\n\n{memory}\n\n"
         messages = [
             ChatMessage(role="system", content=SYSTEM_PROMPT),
             ChatMessage(role="user", content=prompt)
         ]
-        print("------------------------------------------")
-        print(self.llm.apply_chat_template(messages))
-        print("\n\n")
-        response = self.llm.generate(messages).content
-        self.trace.append((prompt, response))
+        # reasoning models usually don't return a valid chat output
+        messages_as_str = self.llm.apply_chat_template(messages)
+        response = self.llm.generate(messages_as_str)
+        self.trace.append(TraceEntry(prompt, response))
         if m := re.search(r"<tool>(.*)</tool>", response, re.DOTALL):
             tool_str = m.groups()[0].strip()
             tm = re.match(r"^([a-zA-Z0-9_]+)\((.*)\)$", tool_str)
@@ -212,9 +211,16 @@ class Agent:
             self.memory.append(tool_output)
             return None
         elif m := re.search(r"<code:jax>(.*)</code:jax>", response, re.DOTALL):
-            return m.groups()[0]
+            return m.groups()[0].strip()
         else:
             raise FormatException(f"Cannot parse response:\n\n {response}")
+
+    def run(self, task: str):
+        result = None
+        while result is None:
+            print("Doing a step...")
+            result = self.step(task)
+        return result
 
 
 def main():
@@ -227,7 +233,7 @@ def main():
     )
 
     self = Agent(llm)
-    prompt = """<code:pytorch>
+    task = """<code:pytorch>
     import torch.nn as nn
 
     conv = nn.Conv2d(3, 32, 5, stride=1)
@@ -235,68 +241,21 @@ def main():
     y = conv(x)
     </code:pytorch>"""
 
+    out = self.run(task)
+    print(out)
+
+    print(self.trace[-1].response)
 
 
-# TODO:
-# * sft model on JAX/Flax NNX code
 
+def main2():
+    llm = LLM.from_pretrained(
+        "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B",
+        max_batch_size=1,
+        max_seq_len=4096,
+        dtype=jnp.bfloat16,
+        param_dtype=jnp.bfloat16
+    )
 
-
-
-# TASK = """
-#     Rewrite the following PYTORCH CODE to FLAX NNX CODE. Return the FLAX NNX CODE.
-#     Example:
-
-
-#     PYTORCH CODE:
-
-#     ```python
-#     import torch.nn as nn
-#     import torch.nn.functional as F
-
-#     class Net(nn.Module):
-#         def __init__(self):
-#             super(Net, self).__init__()
-#             self.conv = nn.Conv2d(1, 32, 3, 1)
-
-#         def forward(self, x):
-#             x = self.conv(x)
-#             x = F.relu(x)
-#             output = F.log_softmax(x, dim=1)
-#             return output
-#     ```
-
-#     FLAX NNX CODE:
-
-#     ```python
-#     import flax.nnx as nnx
-
-#     class Net(nnx.Module):
-#         def __init__(self):
-#             super(Net, self).__init__()
-#             self.conv = nnx.Conv(1, 32, (3, 3), stride=1)
-
-#         def __call__(self, x):
-#             x = self.conv(x)
-#             x = nnx.relu(x)
-#             output = nnx.log_softmax(x, dim=1)
-#             return output
-#     ```
-
-
-#     ---
-
-#     Now, apply this logic to the following code.
-
-#     PYTORCH CODE:
-
-#     ```
-#     import torch
-
-#     x = torch.rand(3, 4)
-#     y = torch.rand(4, 3)
-#     z = x @ y
-#     ```
-#     """
-
-
+    self = Agent(llm)
+    ds = datasets.load_dataset("jtatman/python-code-dataset-500k")["train"]
