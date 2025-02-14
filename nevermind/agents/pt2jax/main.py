@@ -257,5 +257,23 @@ def main2():
         param_dtype=jnp.bfloat16
     )
 
-    self = Agent(llm)
-    ds = datasets.load_dataset("jtatman/python-code-dataset-500k")["train"]
+    agent = Agent(llm)
+    ds = datasets.load_dataset("dfdx/pytorch-snippets")["train"]
+
+    traces = []
+    results = []
+    for i, snippet in enumerate(ds["snippet"][:10]):
+        print(f"---------------- snippet {i} ----------------")
+        try:
+            agent.reset()
+            code = f"<code:pytorch>\n{snippet}\n</code:pytorch>"
+            result = agent.run(code)
+            traces.append(agent.trace)
+            results.append(result)
+        except Exception as e:
+            print(f"Snippet {i} failed with {type(e)}{e.args[0][:100]}")
+            traces.append(agent.trace)
+            results.append(None)
+
+
+
